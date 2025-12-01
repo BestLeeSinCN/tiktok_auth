@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>Facebook Login Callback</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            background: #f2f2f2;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #msg {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #444;
+        }
+    </style>
+</head>
+
+<body>
+<h3>正在登录 Facebook...</h3>
+<div id="msg">初始化中...</div>
+
+<script>
+    // ================================
+    // 从 URL 获取参数 (appId / apiVersion)
+    // ================================
+    function getQueryParam(name) {
+        const url = new URL(window.location.href);
+        return url.searchParams.get(name);
+    }
+
+    const APP_ID = getQueryParam("appId");
+    const API_VERSION = getQueryParam("apiVersion") || "v24.0";
+
+    if (!APP_ID) {
+        document.getElementById("msg").innerText = "错误：必须传入 appId";
+    }
+
+    // ================================
+    // 发送消息到 Flutter（App WebView）
+    // ================================
+    function sendToFlutter(obj) {
+        const data = JSON.stringify(obj);
+
+        // App 内的 WebView
+        if (window.FlutterFacebookLogin) {
+            window.FlutterFacebookLogin.postMessage(data);
+        }
+
+        // Flutter Web
+        window.parent.postMessage(data, "*");
+
+        console.log("Send to Flutter:", obj);
+    }
+
+    // ================================
+    // 加载 Facebook SDK
+    // ================================
+    (function(d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+
+        js = d.createElement(s);
+        js.id = id;
+        js.src = "https://connect.facebook.net/en_US/sdk.js";
+
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+
+    // ================================
+    // SDK 初始化完成后执行
+    // ================================
+    window.fbAsyncInit = function () {
+
+        document.getElementById("msg").innerText = "正在连接 Facebook...";
+
+        FB.init({
+            appId: APP_ID,
+            cookie: true,
+            xfbml: false,
+            version: API_VERSION
+        });
+
+        // 检查是否已登录
+        FB.getLoginStatus(function (response) {
+            handleFBStatus(response, true);
+        });
+    };
+
+    // ================================
+    // 登录状态处理
+    // ================================
+    function handleFBStatus(response, firstTimeCheck) {
+        console.log("FB Status:", response);
+
+        if (response.status === "connected") {
+            // 登录成功
+            const a = response.authResponse;
+
+            sendToFlutter({
+                status: "success",
+                accessToken: a.accessToken,
+                userID: a.userID,
+                expiresIn: a.expiresIn
+            });
+
+            document.getElementById("msg").innerText = "授权成功";
+            return;
+        }
+
+        // 已检查一次状态，但未登录 → 尝试调用登录
+        if (firstTimeCheck) {
+            FB.login(function (loginResponse) {
+                handleFBLoginResult(loginResponse);
+            }, {scope: "public_profile,email"});
+            return;
+        }
+
+        // 初次检查以外进入这里 = 授权失败
+        sendToFlutter({
+            status: "fail",
+            errorMessage: response.status || "unknown_error"
+        });
+
+        document.getElementById("msg").innerText = "授权失败：" + response.status;
+    }
+
+    // ================================
+    // 处理 FB.login 返回结果
+    // ================================
+    function handleFBLoginResult(response) {
+        console.log("FB Login Result:", response);
+
+        if (response.authResponse) {
+            const a = response.authResponse;
+
+            sendToFlutter({
+                status: "success",
+                accessToken: a.accessToken,
+                userID: a.userID,
+                expiresIn: a.expiresIn
+            });
+
+            document.getElementById("msg").innerText = "授权成功";
+        } else {
+            // 用户取消、拒绝授权、弹窗关闭等
+            sendToFlutter({
+                status: "fail",
+                errorMessage: response.status || "login_cancelled"
+            });
+
+            document.getElementById("msg").innerText = "用户取消授权";
+        }
+    }
+
+</script>
+
+</body>
+</html>
