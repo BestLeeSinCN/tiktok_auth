@@ -1,44 +1,46 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"/><title>TikTok Callback</title></head>
+<head>
+  <meta charset="UTF-8" />
+  <title>TikTok Auth Redirect</title>
+</head>
 <body>
 <script>
-function initTikTokLogin(paramsJson) {
-  try {
-    var params = JSON.parse(paramsJson);
-  } catch(e) {
-    console.error('parse params error', e);
-    return;
-  }
+window.initTikTokLogin = function(params) {
+  const p = params;
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get('code');
-  const returnedState = urlParams.get('state');
+  const search = new URLSearchParams(window.location.search);
+  const code = search.get("code");
+  const state = search.get("state");
 
+  // 回调给 App
   if (code) {
-    const payload = JSON.stringify({code: code, state: returnedState});
-    // 在 WebView 中，这个 channel 名字必须和 Flutter 端一致
     if (window.TikTokLoginChannel && window.TikTokLoginChannel.postMessage) {
-      window.TikTokLoginChannel.postMessage(payload);
-    } else {
-      // 如果是在普通浏览器打开，可以直接把结果渲染或转发回你的 server
-      console.log('Auth result:', payload);
+      window.TikTokLoginChannel.postMessage(JSON.stringify({
+        code: code,
+        state: state
+      }));
+      return;
     }
+
+    // H5 模式（可替换为你的页面逻辑）
+    document.body.innerText = "Code: " + code;
     return;
   }
 
-  // 否则去授权页
-  const authUrl =
-    'https://www.tiktok.com/v2/auth/authorize/?' +
-    'client_key=' + encodeURIComponent(params.clientKey) +
-    '&response_type=code' +
-    '&scope=' + encodeURIComponent(params.scope) +
-    '&redirect_uri=' + encodeURIComponent(params.redirectUri) +
-    '&state=' + encodeURIComponent(params.state);
+  // 否则跳转 TikTok 授权
+  const url =
+    "https://www.tiktok.com/v2/auth/authorize/?" +
+    "client_key=" + encodeURIComponent(p.clientKey) +
+    "&response_type=code" +
+    "&scope=" + encodeURIComponent(p.scope) +
+    "&redirect_uri=" + encodeURIComponent(p.redirectUri) +
+    "&state=" + encodeURIComponent(p.state);
 
-  window.location.href = authUrl;
-}
+  window.location.href = url;
+};
 </script>
-<p>Redirecting to TikTok...</p>
+
+跳转中...
 </body>
 </html>
