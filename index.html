@@ -1,50 +1,44 @@
 <!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<title>TikTok Redirect</title>
-</head>
+<html>
+<head><meta charset="utf-8"/><title>TikTok Callback</title></head>
 <body>
-
 <script>
-// Flutter 会在 WebView 里执行这个方法，传入必要参数
 function initTikTokLogin(paramsJson) {
-    const params = JSON.parse(paramsJson);
+  try {
+    var params = JSON.parse(paramsJson);
+  } catch(e) {
+    console.error('parse params error', e);
+    return;
+  }
 
-    const clientKey = params.clientKey;
-    const scope = params.scope || "user.info.basic";
-    const state = params.state;
-    const redirectUri = params.redirectUri; // = 本页 URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  const returnedState = urlParams.get('state');
 
-    // 如果 TikTok 已经回跳本页（带 code）
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get("code");
-    const returnedState = urlParams.get("state");
-
-    if (code) {
-        // 回传给 Flutter
-        if (window.TikTokLoginChannel) {
-            window.TikTokLoginChannel.postMessage(JSON.stringify({
-                code: code,
-                state: returnedState
-            }));
-        }
-        return;
+  if (code) {
+    const payload = JSON.stringify({code: code, state: returnedState});
+    // 在 WebView 中，这个 channel 名字必须和 Flutter 端一致
+    if (window.TikTokLoginChannel && window.TikTokLoginChannel.postMessage) {
+      window.TikTokLoginChannel.postMessage(payload);
+    } else {
+      // 如果是在普通浏览器打开，可以直接把结果渲染或转发回你的 server
+      console.log('Auth result:', payload);
     }
+    return;
+  }
 
-    // 否则跳转到 TikTok 授权页
-    const authUrl =
-        "https://www.tiktok.com/v2/auth/authorize/?" +
-        "client_key=" + encodeURIComponent(clientKey) +
-        "&response_type=code" +
-        "&scope=" + encodeURIComponent(scope) +
-        "&redirect_uri=" + encodeURIComponent(redirectUri) +
-        "&state=" + encodeURIComponent(state);
+  // 否则去授权页
+  const authUrl =
+    'https://www.tiktok.com/v2/auth/authorize/?' +
+    'client_key=' + encodeURIComponent(params.clientKey) +
+    '&response_type=code' +
+    '&scope=' + encodeURIComponent(params.scope) +
+    '&redirect_uri=' + encodeURIComponent(params.redirectUri) +
+    '&state=' + encodeURIComponent(params.state);
 
-    window.location.href = authUrl;
+  window.location.href = authUrl;
 }
 </script>
-
-<p>Loading TikTok Login…</p>
+<p>Redirecting to TikTok...</p>
 </body>
 </html>
