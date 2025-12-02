@@ -1,99 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <title>Facebook Login Callback</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<title>TikTok Redirect</title>
 </head>
-
 <body>
 
 <script>
-    function getQueryParam(name) {
-        const url = new URL(window.location.href);
-        return url.searchParams.get(name);
+// Flutter 会在 WebView 里执行这个方法，传入必要参数
+function initTikTokLogin(paramsJson) {
+    const params = JSON.parse(paramsJson);
+
+    const clientKey = params.clientKey;
+    const scope = params.scope || "user.info.basic";
+    const state = params.state;
+    const redirectUri = params.redirectUri; // = 本页 URL
+
+    // 如果 TikTok 已经回跳本页（带 code）
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get("code");
+    const returnedState = urlParams.get("state");
+
+    if (code) {
+        // 回传给 Flutter
+        if (window.TikTokLoginChannel) {
+            window.TikTokLoginChannel.postMessage(JSON.stringify({
+                code: code,
+                state: returnedState
+            }));
+        }
+        return;
     }
 
-    // 动态参数
-    const APP_ID = getQueryParam("appId");
-    const API_VERSION = getQueryParam("apiVersion") || "v24.0";
-    const LANG = getQueryParam("lang") || "en_US";
+    // 否则跳转到 TikTok 授权页
+    const authUrl =
+        "https://www.tiktok.com/v2/auth/authorize/?" +
+        "client_key=" + encodeURIComponent(clientKey) +
+        "&response_type=code" +
+        "&scope=" + encodeURIComponent(scope) +
+        "&redirect_uri=" + encodeURIComponent(redirectUri) +
+        "&state=" + encodeURIComponent(state);
 
-    // 发给 Flutter
-    function sendToFlutter(obj) {
-        const json = JSON.stringify(obj);
-        if (window.FlutterFacebookLogin) {
-            window.FlutterFacebookLogin.postMessage(json);
-        }
-        window.parent.postMessage(json, "*");
-    }
-
-    // 加载 SDK（根据语言）
-    (function(d, s, id) {
-        if (d.getElementById(id)) return;
-        var js = d.createElement(s);
-        js.id = id;
-        js.src = `https://connect.facebook.net/${LANG}/sdk.js`;
-        var fjs = d.getElementsByTagName(s)[0];
-        fjs.parentNode.insertBefore(js, fjs);
-    }(document, 'script', 'facebook-jssdk'));
-
-    window.fbAsyncInit = function() {
-        FB.init({
-            appId: APP_ID,
-            cookie: true,
-            xfbml: false,
-            version: API_VERSION
-        });
-
-        FB.getLoginStatus(function(res) {
-            handleStatus(res, true);
-        });
-    };
-
-    function handleStatus(res, firstCheck) {
-        if (res.status === "connected") {
-            const a = res.authResponse;
-            sendToFlutter({
-                status: "success",
-                userID: a.userID,
-                accessToken: a.accessToken,
-                expiresIn: a.expiresIn
-            });
-            return;
-        }
-
-        if (firstCheck) {
-            FB.login(function(resp) {
-                handleLogin(resp);
-            }, {scope: "public_profile,email"});
-            return;
-        }
-
-        // 登录失败
-        sendToFlutter({
-            status: "fail",
-            errorMessage: res.status || "unknown_error"
-        });
-    }
-
-    function handleLogin(res) {
-        if (res.authResponse) {
-            const a = res.authResponse;
-            sendToFlutter({
-                status: "success",
-                userID: a.userID,
-                accessToken: a.accessToken,
-                expiresIn: a.expiresIn
-            });
-        } else {
-            sendToFlutter({
-                status: "fail",
-                errorMessage: "user_cancelled"
-            });
-        }
-    }
+    window.location.href = authUrl;
+}
 </script>
 
+<p>Loading TikTok Login…</p>
 </body>
 </html>
